@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EOQ / Acero — Control de Producción</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0f1a;--surface:#111827;--surface2:#1a2235;--border:#1e2d45;
+  --accent:#00d4ff;--green:#00c896;--red:#ff4757;--yellow:#ffa502;--galv:#f39c12;
+  --laser:#b06dff;
+  --text:#e8f0fe;--text2:#8899aa;--text3:#556677;
+  --font:'IBM Plex Sans',sans-serif;--mono:'IBM Plex Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+
+/* NAV */
+.nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;display:flex;align-items:center;position:sticky;top:0;z-index:100;flex-wrap:wrap}
+.nav-brand{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--accent);letter-spacing:2px;padding:16px 16px 16px 0;border-right:1px solid var(--border);margin-right:10px;white-space:nowrap}
+
+/* CENTRO TRABAJO TABS */
+.ct-tabs{display:flex;gap:4px;margin-right:12px;border-right:1px solid var(--border);padding-right:12px}
+.ct-btn{padding:7px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);transition:all .2s;font-family:var(--font)}
+.ct-btn:hover{color:var(--text);border-color:var(--text2)}
+.ct-troq.active{background:rgba(0,212,255,.12);color:var(--accent);border-color:var(--accent)}
+.ct-laser.active{background:rgba(176,109,255,.12);color:var(--laser);border-color:var(--laser)}
+
+/* PAGE TABS */
+.nav-tab{padding:18px 16px;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;white-space:nowrap}
+.nav-tab:hover{color:var(--text)}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.ct-laser-mode .nav-tab.active{color:var(--laser);border-bottom-color:var(--laser)}
+
+.main{padding:28px;max-width:1400px;margin:0 auto}
+.page{display:none}.page.active{display:block}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-.5px;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
+
+/* CT BADGE */
+.ct-badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;margin-left:8px;vertical-align:middle}
+.ct-badge.troq{background:rgba(0,212,255,.1);color:var(--accent);border:1px solid rgba(0,212,255,.25)}
+.ct-badge.laser{background:rgba(176,109,255,.1);color:var(--laser);border:1px solid rgba(176,109,255,.25)}
+
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.kpi{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:20px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.red::before{background:var(--red)}.kpi.green::before{background:var(--green)}.kpi.yellow::before{background:var(--yellow)}.kpi.blue::before{background:var(--accent)}.kpi.purple::before{background:var(--laser)}
+.kpi-label{font-size:10px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:8px}
+.kpi-value{font-family:var(--mono);font-size:28px;font-weight:600}
+.kpi.red .kpi-value{color:var(--red)}.kpi.green .kpi-value{color:var(--green)}.kpi.yellow .kpi-value{color:var(--yellow)}.kpi.blue .kpi-value{color:var(--accent)}.kpi.purple .kpi-value{color:var(--laser)}
+.kpi-sub{font-size:11px;color:var(--text3);margin-top:4px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;margin-bottom:24px}
+.card-title{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--text2);margin-bottom:16px}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);margin-bottom:24px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--surface2);padding:10px 14px;text-align:left;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);white-space:nowrap;border-bottom:1px solid var(--border)}
+td{padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:none}tr:hover td{background:var(--surface2)}
+.mono{font-family:var(--mono);font-size:12px}.num-right{text-align:right}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:.5px}
+.badge-CRITICO{background:rgba(255,71,87,.15);color:var(--red);border:1px solid rgba(255,71,87,.3)}
+.badge-EXCESO{background:rgba(255,165,2,.15);color:var(--yellow);border:1px solid rgba(255,165,2,.3)}
+.badge-OPTIMO{background:rgba(0,200,150,.15);color:var(--green);border:1px solid rgba(0,200,150,.3)}
+.badge-BAJO_ROP{background:rgba(0,212,255,.15);color:var(--accent);border:1px solid rgba(0,212,255,.3)}
+.badge-STD{background:rgba(136,153,170,.1);color:var(--text2);border:1px solid var(--border)}
+.badge-RAW{background:rgba(243,156,18,.12);color:var(--galv);border:1px solid rgba(243,156,18,.3)}
+.badge-GALV{background:rgba(243,156,18,.2);color:var(--galv);border:1px solid rgba(243,156,18,.4)}
+.prog-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:6px}
+.prog-fill{height:100%;border-radius:2px}
+.btn{padding:9px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;font-family:var(--font)}
+.btn-primary{background:var(--accent);color:#000}.btn-primary:hover{opacity:.85}
+.btn-primary-laser{background:var(--laser);color:#fff}.btn-primary-laser:hover{opacity:.85}
+.btn-danger{background:rgba(255,71,87,.2);color:var(--red);border:1px solid rgba(255,71,87,.3)}.btn-danger:hover{background:rgba(255,71,87,.3)}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:13px;width:100%;outline:none;transition:border .2s}
+.input:focus{border-color:var(--accent)}select.input option{background:var(--surface2)}
+.input-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text2);display:block;margin-bottom:6px}
+.input-group{display:flex;flex-direction:column;margin-bottom:16px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.alert-info{padding:12px 16px;border-radius:6px;font-size:13px;margin-bottom:16px;background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);color:var(--accent)}
+.day-block{margin-bottom:8px;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.day-header{background:var(--surface2);padding:10px 16px;display:flex;align-items:center;gap:12px}
+.day-num-label{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--accent);min-width:40px}
+.day-label{font-size:12px;color:var(--text2)}
+.day-sku-row{padding:10px 16px;display:flex;align-items:center;gap:12px;border-top:1px solid var(--border);flex-wrap:wrap}
+.day-sku-row:hover{background:var(--surface2)}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px;width:100%;max-width:580px;max-height:90vh;overflow-y:auto}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:20px}
+.params-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
+.params-formula{padding:10px 0;border-bottom:1px solid var(--border)}
+.flex{display:flex;align-items:center;gap:8px}
+.flex-between{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+.text-sm{font-size:12px;color:var(--text2)}.mb16{margin-bottom:16px}
+.cost-big{font-family:var(--mono);font-size:32px;font-weight:700;color:var(--red)}
+.cal-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px}
+.cal-nav{display:flex;align-items:center;gap:10px}
+.cal-nav-btn{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px 14px;color:var(--text);font-size:14px;cursor:pointer;transition:all .2s}
+.cal-nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+.cal-month-label{font-family:var(--mono);font-size:16px;font-weight:600;color:var(--accent);min-width:160px;text-align:center}
+.cal-legend{display:flex;gap:14px;flex-wrap:wrap}
+.cal-leg-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2)}
+.cal-leg-dot{width:10px;height:10px;border-radius:2px}
+.cal-leg-dot.STD{background:var(--green)}.cal-leg-dot.RAW{background:var(--yellow)}.cal-leg-dot.GALV{background:var(--galv)}
+.cal-grid{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px}
+.cal-header-row{display:grid;grid-template-columns:repeat(7,1fr);background:var(--surface2)}
+.cal-header-row div{padding:9px 6px;text-align:center;font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);border-right:1px solid var(--border)}
+.cal-header-row div:last-child{border-right:none}
+.cal-body{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-cell{min-height:88px;border-right:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;background:var(--surface)}
+.cal-cell:nth-child(7n){border-right:none}
+.cal-cell.cal-empty{background:var(--bg)}.cal-cell.cal-weekend{background:rgba(10,15,26,.5)}
+.cal-cell.cal-today .cal-day-num{background:var(--accent);color:#000;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cal-day-num{font-size:12px;font-weight:600;color:var(--text3);margin-bottom:4px;width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.maq-chip{font-size:10px;padding:2px 6px;border-radius:3px;margin-bottom:1px;cursor:pointer;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;transition:opacity .15s}
+.maq-chip:hover{opacity:.8}
+.maq-chip.STD{background:rgba(0,200,150,.18);color:var(--green);border-left:2px solid var(--green)}
+.maq-chip.RAW{background:rgba(255,165,2,.15);color:var(--yellow);border-left:2px solid var(--yellow)}
+.maq-chip.GALV{background:rgba(243,156,18,.18);color:var(--galv);border-left:2px solid var(--galv)}
+.maq-chip.span-mid{border-left:2px solid transparent;opacity:.7;border-radius:0}
+.maq-chip.span-end{border-left:2px solid transparent;opacity:.7;border-radius:0 3px 3px 0}
+.maq-chip.span-start{border-radius:3px 0 0 3px}
+.chip-piezas{font-size:9px;opacity:.8;margin-left:3px}
+.day-pill{display:inline-flex;align-items:center;gap:2px;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;margin-bottom:2px;letter-spacing:.2px;cursor:default}
+.day-pill.inicio{background:rgba(0,212,255,.18);color:var(--accent);border:1px solid rgba(0,212,255,.35)}
+.day-pill.fin-plan{background:rgba(255,165,2,.18);color:var(--yellow);border:1px solid rgba(255,165,2,.35)}
+.day-pill.fin-real{background:rgba(176,109,255,.2);color:var(--laser);border:1px solid rgba(176,109,255,.4)}
+.cal-overflow{font-size:10px;color:var(--text3);margin-top:2px}
+.maq-chip.terminada{background:rgba(136,153,170,.12);color:var(--text3);border-left:2px solid var(--text3);text-decoration:line-through;opacity:.6}
+.day-pill.terminada{background:rgba(0,200,150,.25);color:var(--green);border:1px solid rgba(0,200,150,.5)}
+.detail-modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;width:100%;max-width:400px}
+.detail-title{font-size:15px;font-weight:700;margin-bottom:16px;color:var(--accent)}
+.detail-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.detail-row:last-of-type{border-bottom:none}
+.detail-label{color:var(--text2)}.detail-val{font-family:var(--mono);font-weight:600;color:var(--text)}
+@media(max-width:768px){.grid-4{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}.cal-cell{min-height:60px}}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="main-nav">
+  <div class="nav-brand">EOQ / ACERO</div>
+  <div class="ct-tabs">
+    <button class="ct-btn ct-troq active" id="ct-troq" onclick="switchCT('troq')">⚙ Troqueles</button>
+    <button class="ct-btn ct-laser" id="ct-laser" onclick="switchCT('laser')">✂ Corte Láser</button>
+  </div>
+  <div class="nav-tab active" onclick="showPage('dashboard',this)">Dashboard</div>
+  <div class="nav-tab" onclick="showPage('schedule',this)">Prog. Diaria</div>
+  <div class="nav-tab" onclick="showPage('calendario',this)">Calendario</div>
+  <div class="nav-tab" onclick="showPage('catalog',this)">Catálogo SKU</div>
+  <div class="nav-tab" onclick="showPage('params',this)">Parámetros EOQ</div>
+</nav>
+
+<div class="main">
+
+  <!-- DASHBOARD -->
+  <div id="page-dashboard" class="page active">
+    <div class="page-title">Dashboard de Sobreinventario <span class="ct-badge troq" id="dash-badge">⚙ Troqueles</span></div>
+    <div class="page-sub">Estado actual del inventario vs tolerancia +10% por SKU</div>
+    <div class="grid-4" id="dash-kpis"></div>
+    <div class="card" id="dash-costo"></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>SKU</th><th>Nombre en Planta</th><th>Tipo</th><th class="num-right">Inv. Actual</th><th class="num-right">Tolerancia</th><th class="num-right">Exceso</th><th class="num-right">ROP</th><th class="num-right">EOQ Real</th><th>Estado</th><th>Acción</th></tr></thead>
+      <tbody id="dash-tbody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- PROG DIARIA -->
+  <div id="page-schedule" class="page">
+    <div class="page-title">Programación Diaria <span class="ct-badge troq" id="sched-badge">⚙ Troqueles</span></div>
+    <div class="page-sub" id="sched-sub"></div>
+    <div class="grid-4" id="sched-kpis"></div>
+    <div class="alert-info">ℹ️ El día de producción es el día hábil en que el inventario alcanza el ROP. Si dos SKUs coinciden, el segundo se recorre al siguiente día disponible.</div>
+    <div id="sched-days"></div>
+  </div>
+
+  <!-- CALENDARIO -->
+  <div id="page-calendario" class="page">
+    <div class="flex-between">
+      <div>
+        <div class="page-title">Calendario de Maquilas <span class="ct-badge troq" id="cal-badge">⚙ Troqueles</span></div>
+        <div class="page-sub">Producción interna programada · SKU, lote y fechas de inicio/fin</div>
+      </div>
+      <div class="flex">
+        <button class="btn btn-ghost" id="btn-auto-maq" onclick="autoProgramar()">⚡ Auto-programar mes</button>
+        <button class="btn btn-danger btn-sm" style="padding:9px 18px;font-size:13px" onclick="eliminarMesMaquilas()">🗑 Eliminar mes</button>
+        <button class="btn btn-primary" id="btn-nueva-maq" onclick="openMaqModal(null)">+ Nueva maquila</button>
+      </div>
+    </div>
+    <div id="auto-alert" style="display:none" class="alert-info"></div>
+    <div class="grid-4" id="cal-kpis"></div>
+    <div class="cal-toolbar">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="changeMonth(-1)">&#8249;</button>
+        <div class="cal-month-label" id="cal-month-label"></div>
+        <button class="cal-nav-btn" onclick="changeMonth(1)">&#8250;</button>
+      </div>
+      <div class="cal-legend">
+        <div class="cal-leg-item"><div class="cal-leg-dot STD"></div>STD</div>
+        <div class="cal-leg-item"><div class="cal-leg-dot RAW"></div>RAW</div>
+        <div class="cal-leg-item"><div class="cal-leg-dot GALV"></div>GALV</div>
+      </div>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-header-row"><div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div></div>
+      <div class="cal-body" id="cal-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Maquilas del mes</div>
+      <div class="table-wrap" style="margin-bottom:0"><table>
+        <thead><tr><th>SKU</th><th>Nombre</th><th>Tipo</th><th class="num-right">Lote</th><th class="num-right">Inicio</th><th class="num-right">Fin Plan</th><th class="num-right">Fin Real</th><th class="num-right">Días</th><th></th></tr></thead>
+        <tbody id="maq-list-tbody"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- CATALOGO -->
+  <div id="page-catalog" class="page">
+    <div class="flex-between">
+      <div>
+        <div class="page-title">Catálogo de SKUs <span class="ct-badge troq" id="cat-badge">⚙ Troqueles</span></div>
+        <div class="page-sub">Edita inventario, demanda, costos y parámetros por pieza</div>
+      </div>
+      <button class="btn btn-primary" id="btn-agregar-sku" onclick="openForm(null)">+ Agregar SKU</button>
+    </div>
+    <div class="mb16"><input class="input" style="max-width:300px" placeholder="Buscar por SKU o nombre…" oninput="filterCatalog(this.value)"/></div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>SKU</th><th>Nombre</th><th>Tipo</th><th class="num-right">Inv.</th><th class="num-right">D_mes</th><th class="num-right">Cu</th><th class="num-right">LT</th><th class="num-right">MinLote</th><th class="num-right">EOQ Puro</th><th class="num-right">EOQ Real</th><th class="num-right">ROP</th><th class="num-right">Inv.Máx</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="cat-tbody"></tbody>
+    </table></div>
+  </div>
+
+  <!-- PARAMS -->
+  <div id="page-params" class="page">
+    <div class="page-title">Parámetros EOQ <span class="ct-badge troq" id="params-badge">⚙ Troqueles</span></div>
+    <div class="page-sub">Configuración del modelo para el centro de trabajo activo.</div>
+    <div style="max-width:640px">
+      <div class="card">
+        <div class="card-title">Parámetros Globales</div>
+        <div class="params-grid">
+          <div class="input-group"><label class="input-label">Días hábiles por mes</label><input class="input" type="number" id="p-diasMes"/></div>
+          <div class="input-group"><label class="input-label">% Costo mantenimiento (anual)</label><input class="input" type="number" id="p-hPct"/></div>
+          <div class="input-group"><label class="input-label">Día hábil de inicio</label><input class="input" type="number" id="p-diaInicio"/></div>
+          <div class="input-group"><label class="input-label">Máx. SKUs por día</label><input class="input" type="number" id="p-maxSkuDia"/></div>
+        </div>
+        <div class="flex">
+          <button class="btn btn-primary" onclick="saveParams()">Guardar cambios</button>
+          <button class="btn btn-ghost" onclick="loadParamInputs()">Cancelar</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Datos · Exportar / Importar</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-ghost" onclick="exportarDatos()">⬇ Exportar datos</button>
+          <label class="btn btn-ghost" style="cursor:pointer">⬆ Importar datos<input type="file" accept=".json" style="display:none" onchange="importarDatos(this)"/></label>
+        </div>
+        <div class="text-sm">Exporta tus datos como JSON para respaldarlos o transferirlos a otro navegador/dispositivo.</div>
+      </div>
+      <div class="card"><div class="card-title">Fórmulas del Modelo</div><div id="formulas-list"></div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL SKU -->
+<div class="overlay" id="sku-modal" onclick="if(event.target===this)closeForm()">
+  <div class="modal">
+    <div class="modal-title" id="form-title">SKU</div>
+    <input type="hidden" id="form-id"/>
+    <div class="form-grid">
+      <div class="input-group"><label class="input-label">SKU</label><input class="input" id="f-sku" type="text"/></div>
+      <div class="input-group"><label class="input-label">Nombre en planta</label><input class="input" id="f-nombre" type="text"/></div>
+      <div class="input-group"><label class="input-label">Tipo</label><select class="input" id="f-tipo"><option>STD</option><option>RAW</option><option>GALV</option></select></div>
+      <div class="input-group"><label class="input-label">Lead Time (días)</label><input class="input" id="f-lt" type="number"/></div>
+      <div class="input-group"><label class="input-label">Inventario actual</label><input class="input" id="f-inv" type="number"/></div>
+      <div class="input-group"><label class="input-label">Demanda mensual</label><input class="input" id="f-dMes" type="number"/></div>
+      <div class="input-group"><label class="input-label">Tolerancia +10%</label><input class="input" id="f-tol" type="number"/></div>
+      <div class="input-group"><label class="input-label">Costo unitario (MXN)</label><input class="input" id="f-cu" type="number" step="0.01"/></div>
+      <div class="input-group"><label class="input-label">Costo setup (MXN)</label><input class="input" id="f-setup" type="number" step="0.01"/></div>
+      <div class="input-group"><label class="input-label">Mínimo lote (pzas)</label><input class="input" id="f-minLote" type="number"/></div>
+    </div>
+    <div class="flex" style="margin-top:8px">
+      <button class="btn btn-primary" onclick="saveSku()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeForm()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MAQUILA -->
+<div class="overlay" id="maq-modal" onclick="if(event.target===this)closeMaqModal()">
+  <div class="modal" style="max-width:500px">
+    <div class="modal-title" id="maq-form-title">Nueva maquila</div>
+    <input type="hidden" id="mf-id"/>
+    <div class="input-group"><label class="input-label">SKU</label><select class="input" id="mf-sku" onchange="fillMaqSku()"></select></div>
+    <div class="input-group"><label class="input-label">Nombre</label><input class="input" id="mf-nombre" type="text" readonly style="opacity:.65"/></div>
+    <div class="form-grid">
+      <div class="input-group"><label class="input-label">Fecha inicio</label><input class="input" id="mf-start" type="date"/></div>
+      <div class="input-group"><label class="input-label">Fecha fin</label><input class="input" id="mf-end" type="date"/></div>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Lote (pzas)</label>
+      <div class="flex">
+        <input class="input" id="mf-lote" type="number" style="flex:1"/>
+        <button class="btn btn-ghost btn-sm" onclick="calcularLoteDemanda()" title="Calcula las piezas necesarias para cubrir la demanda mensual" style="white-space:nowrap">⚡ Cubrir demanda</button>
+      </div>
+      <div class="text-sm" style="margin-top:5px" id="mf-lote-info"></div>
+    </div>
+    <div class="flex" style="margin-top:8px">
+      <button class="btn btn-primary" onclick="saveMaquila()">Guardar</button>
+      <button class="btn btn-ghost" onclick="closeMaqModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE MAQUILA -->
+<div class="overlay" id="maq-detail-modal" onclick="if(event.target===this)closeMaqDetail()">
+  <div class="detail-modal">
+    <div class="detail-title" id="maq-detail-title"></div>
+    <div id="maq-detail-rows"></div>
+    <div style="margin-top:14px;padding:12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border)">
+      <div class="input-label" style="margin-bottom:8px">Marcar como terminada</div>
+      <div class="flex">
+        <input class="input" type="date" id="maq-fin-real" style="flex:1"/>
+        <button class="btn btn-ghost btn-sm" style="border-color:var(--laser);color:var(--laser);white-space:nowrap" onclick="marcarTerminada()">✓ Aplicar</button>
+      </div>
+      <div class="text-sm" style="margin-top:6px">Actualiza la fecha fin si se terminó antes de lo planeado.</div>
+    </div>
+    <div class="flex" style="margin-top:14px">
+      <button class="btn btn-danger btn-sm" id="maq-detail-del">Eliminar</button>
+      <button class="btn btn-ghost btn-sm" id="maq-detail-edit">Editar</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeMaqDetail()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CENTROS DE TRABAJO ────────────────────────────────────────────────────────
+let activeCT = 'troq'; // 'troq' | 'laser'
+
+const CT_DATA = {
+  troq: {
+    label: '⚙ Troqueles',
+    cls: 'troq',
+    accent: '#00d4ff',
+    skus: [
+      {id:1,  sku:"22120006", nombre:"Tapa cajon 106",          tipo:"STD",  inv:840,   dMes:941,  tol:1036, cu:11.43, setup:28.75, lt:4,  minLote:500 },
+      {id:2,  sku:"22501003", nombre:"Gancho G-D",              tipo:"STD",  inv:2538,  dMes:1584, tol:1742, cu:4.42,  setup:28.75, lt:4,  minLote:500 },
+      {id:3,  sku:"22501004", nombre:"Gancho G-I",              tipo:"STD",  inv:2502,  dMes:1583, tol:1742, cu:4.42,  setup:28.75, lt:4,  minLote:500 },
+      {id:4,  sku:"22501005", nombre:"Gancho CH-D",             tipo:"STD",  inv:2918,  dMes:2827, tol:3109, cu:2.54,  setup:28.75, lt:4,  minLote:500 },
+      {id:5,  sku:"22501006", nombre:"Gancho CH-I",             tipo:"STD",  inv:8336,  dMes:2823, tol:3105, cu:2.54,  setup:28.75, lt:4,  minLote:500 },
+      {id:6,  sku:"22501007", nombre:"Escuadra L natural",      tipo:"STD",  inv:9976,  dMes:3739, tol:4112, cu:2.79,  setup:28.75, lt:4,  minLote:500 },
+      {id:7,  sku:"22501009", nombre:"L Barrenada",             tipo:"STD",  inv:3224,  dMes:278,  tol:306,  cu:2.79,  setup:28.75, lt:4,  minLote:500 },
+      {id:8,  sku:"22501012", nombre:"L Ovalada",               tipo:"STD",  inv:1923,  dMes:688,  tol:757,  cu:2.79,  setup:28.75, lt:4,  minLote:500 },
+      {id:9,  sku:"22501038", nombre:"Escuadra Recortada RAW",  tipo:"RAW",  inv:4386,  dMes:2326, tol:2559, cu:1.77,  setup:28.75, lt:4,  minLote:2000},
+      {id:10, sku:"32201008", nombre:"Escuadra Recortada GALV", tipo:"GALV", inv:14257, dMes:3002, tol:3302, cu:1.77,  setup:28.75, lt:14, minLote:2000},
+      {id:11, sku:"22501037", nombre:"Escuadra Completa RAW",   tipo:"RAW",  inv:3998,  dMes:2326, tol:2559, cu:1.94,  setup:28.75, lt:4,  minLote:500 },
+      {id:12, sku:"32201007", nombre:"Escuadra Completa GALV",  tipo:"GALV", inv:13408, dMes:8127, tol:8939, cu:1.94,  setup:28.75, lt:14, minLote:3000},
+      {id:13, sku:"22501008", nombre:"Solera union",            tipo:"STD",  inv:338,   dMes:435,  tol:479,  cu:5.48,  setup:28.75, lt:4,  minLote:500 },
+      {id:14, sku:"22501018", nombre:"Escuadra doble barreno",  tipo:"STD",  inv:500,   dMes:564,  tol:620,  cu:3.80,  setup:28.75, lt:4,  minLote:500 },
+      {id:15, sku:"22501101", nombre:"Placa ADA",               tipo:"STD",  inv:0,     dMes:0,    tol:0,    cu:0,     setup:28.75, lt:4,  minLote:500 },
+      {id:16, sku:"22501105", nombre:"Jaladera de Arch",        tipo:"STD",  inv:0,     dMes:0,    tol:0,    cu:0,     setup:28.75, lt:4,  minLote:500 },
+    ],
+    maquilas: [],
+    params: {diasMes:21, hPct:18, diaInicio:6, maxSkuDia:2},
+  },
+  laser: {
+    label: '✂ Corte Láser',
+    cls: 'laser',
+    accent: '#b06dff',
+    skus: [],
+    maquilas: [],
+    params: {diasMes:21, hPct:18, diaInicio:6, maxSkuDia:2},
+  }
+};
+
+let maqIdCounter = 100;
+let skuIdCounter = 200;
+let catFilter = '';
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+
+// Shortcuts to active CT data
+function ct()      { return CT_DATA[activeCT]; }
+function skus()    { return ct().skus; }
+function maqs()    { return ct().maquilas; }
+function params()  { return ct().params; }
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const fmt   = n => (n??0).toLocaleString('es-MX');
+const fmxn  = n => '$'+(n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const pad   = n => String(n).padStart(2,'0');
+const TIPO_LABEL   = {STD:'Estándar',RAW:'⚙ Sin Galv.',GALV:'✦ Galvanizado'};
+const ESTADO_LABEL = {CRITICO:'🔴 CRÍTICO',EXCESO:'🟡 EXCESO',OPTIMO:'✅ ÓPTIMO',BAJO_ROP:'🔵 BAJO ROP'};
+const ACCION_LABEL = {CRITICO:'Detener producción',EXCESO:'Reducir lote',BAJO_ROP:'⚡ Orden urgente',OPTIMO:'Mantener programa'};
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function dateStr(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function parseDateLocal(s){ const[y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); }
+function diffDays(s,e){ return Math.max(1,Math.round((parseDateLocal(e)-parseDateLocal(s))/86400000)+1); }
+
+// ── CALC EOQ ──────────────────────────────────────────────────────────────────
+function calcEOQ(s,p){
+  const hMes=s.cu*p.hPct/100/12;
+  const eoqPuro=hMes>0?Math.round(Math.sqrt(2*s.dMes*s.setup/hMes)):s.minLote;
+  const eoqReal=Math.max(eoqPuro,s.minLote);
+  const ss=Math.max(1,Math.round(s.dMes*0.05));
+  const rop=Math.ceil((s.dMes/p.diasMes)*s.lt+ss);
+  const invMax=eoqReal+ss, cons=s.dMes/p.diasMes;
+  const dh=s.inv<=rop?0:(s.inv-rop)/cons;
+  const diaRop=Math.min(p.diaInicio+Math.floor(dh),p.diasMes+5);
+  const invEnRop=Math.max(0,Math.round(s.inv-cons*(diaRop-p.diaInicio)));
+  const estado=s.inv>s.tol*1.3?'CRITICO':s.inv>s.tol?'EXCESO':s.inv<rop?'BAJO_ROP':'OPTIMO';
+  return{eoqPuro,eoqReal,ss,rop,invMax,cons:+cons.toFixed(1),diaRop,invEnRop,invPost:invEnRop+eoqReal,cobertura:+(eoqReal/(s.dMes||1)).toFixed(1),estado};
+}
+function buildSchedule(){
+  const p=params();
+  const items=skus().map(s=>({...s,...calcEOQ(s,p)}));
+  items.sort((a,b)=>a.diaRop-b.diaRop);
+  const dc={};
+  return items.map(it=>{let d=it.diaRop;while((dc[d]||0)>=p.maxSkuDia)d++;dc[d]=(dc[d]||0)+1;return{...it,diaAsignado:d,ajustado:d!==it.diaRop};}).sort((a,b)=>a.diaAsignado-b.diaAsignado);
+}
+function getComputed(){ return skus().map(s=>({...s,...calcEOQ(s,params())})); }
+
+// ── SWITCH CENTRO DE TRABAJO ──────────────────────────────────────────────────
+function switchCT(ct_id){
+  activeCT = ct_id;
+  const isLaser = ct_id === 'laser';
+
+  // Update CT buttons
+  document.getElementById('ct-troq').classList.toggle('active', !isLaser);
+  document.getElementById('ct-laser').classList.toggle('active', isLaser);
+
+  // Update nav tab color
+  const activeTab = document.querySelector('.nav-tab.active');
+  if(activeTab){
+    activeTab.style.color = isLaser ? 'var(--laser)' : 'var(--accent)';
+    activeTab.style.borderBottomColor = isLaser ? 'var(--laser)' : 'var(--accent)';
+  }
+
+  // Update all badges
+  ['dash-badge','sched-badge','cal-badge','cat-badge','params-badge'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.className=`ct-badge ${ct_id==='laser'?'laser':'troq'}`; el.textContent=ct().label; }
+  });
+
+  // Update add buttons
+  const btnSku = document.getElementById('btn-agregar-sku');
+  const btnMaq = document.getElementById('btn-nueva-maq');
+  if(btnSku){ btnSku.className=isLaser?'btn btn-primary-laser':'btn btn-primary'; }
+  if(btnMaq){ btnMaq.className=isLaser?'btn btn-primary-laser':'btn btn-primary'; }
+
+  // Re-render current page
+  const curPage = document.querySelector('.page.active');
+  if(curPage){
+    const id = curPage.id.replace('page-','');
+    const fns = {dashboard:renderDashboard,schedule:renderSchedule,calendario:renderCalendario,catalog:renderCatalog,params:loadParamInputs};
+    if(fns[id]) fns[id]();
+  }
+}
+
+// ── NAV ───────────────────────────────────────────────────────────────────────
+function showPage(id,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>{t.classList.remove('active');t.style.color='';t.style.borderBottomColor='';});
+  document.getElementById('page-'+id).classList.add('active');
+  el.classList.add('active');
+  const isLaser = activeCT==='laser';
+  el.style.color = isLaser?'var(--laser)':'var(--accent)';
+  el.style.borderBottomColor = isLaser?'var(--laser)':'var(--accent)';
+  if(id==='dashboard')  renderDashboard();
+  if(id==='schedule')   renderSchedule();
+  if(id==='calendario') renderCalendario();
+  if(id==='catalog')    renderCatalog();
+  if(id==='params')     loadParamInputs();
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+function renderDashboard(){
+  const data=getComputed(), cnt={CRITICO:0,EXCESO:0,BAJO_ROP:0,OPTIMO:0};
+  data.forEach(s=>cnt[s.estado]++);
+  const costo=data.reduce((a,s)=>a+Math.max(0,s.inv-s.tol)*s.cu*0.18/12,0);
+  const isLaser=activeCT==='laser';
+  const kpiColor=isLaser?'purple':'blue';
+  document.getElementById('dash-kpis').innerHTML=`
+    <div class="kpi red"><div class="kpi-label">Críticos</div><div class="kpi-value">${cnt.CRITICO}</div><div class="kpi-sub">Inv > 130% tolerancia</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Con Exceso</div><div class="kpi-value">${cnt.EXCESO}</div><div class="kpi-sub">Inv > tolerancia</div></div>
+    <div class="kpi ${kpiColor}"><div class="kpi-label">Bajo ROP</div><div class="kpi-value">${cnt.BAJO_ROP}</div><div class="kpi-sub">Requieren orden urgente</div></div>
+    <div class="kpi green"><div class="kpi-label">En Óptimo</div><div class="kpi-value">${cnt.OPTIMO}</div><div class="kpi-sub">Nivel correcto</div></div>`;
+  document.getElementById('dash-costo').innerHTML=`<div class="card-title">Costo estimado de sobreinventario (mes actual)</div><div class="cost-big">${fmxn(costo)} MXN</div><div class="text-sm" style="margin-top:6px">= Exceso de piezas × Cu × H% anual / 12</div>`;
+  const order={CRITICO:0,EXCESO:1,BAJO_ROP:2,OPTIMO:3};
+  const sorted=[...data].sort((a,b)=>order[a.estado]-order[b.estado]);
+  const barColor=e=>e==='CRITICO'?'var(--red)':e==='EXCESO'?'var(--yellow)':e==='BAJO_ROP'?'var(--accent)':'var(--green)';
+  document.getElementById('dash-tbody').innerHTML=sorted.map(s=>{
+    const exc=Math.max(0,s.inv-s.tol),pct=Math.min(100,s.tol>0?Math.round(s.inv/s.tol*100):0);
+    return`<tr><td><span class="mono">${s.sku}</span></td><td style="font-weight:500">${s.nombre}</td>
+    <td><span class="badge badge-${s.tipo}">${TIPO_LABEL[s.tipo]}</span></td>
+    <td class="num-right mono">${fmt(s.inv)}<div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${barColor(s.estado)}"></div></div></td>
+    <td class="num-right mono">${fmt(s.tol)}</td>
+    <td class="num-right mono" style="color:${exc>0?'var(--red)':'var(--text2)'}">${exc>0?'+'+fmt(exc):'–'}</td>
+    <td class="num-right mono" style="color:var(--yellow)">${fmt(s.rop)}</td>
+    <td class="num-right mono" style="color:var(--green)">${fmt(s.eoqReal)}</td>
+    <td><span class="badge badge-${s.estado}">${ESTADO_LABEL[s.estado]}</span></td>
+    <td style="font-size:12px;color:var(--text2)">${ACCION_LABEL[s.estado]}</td></tr>`;
+  }).join('');
+}
+
+// ── SCHEDULE ──────────────────────────────────────────────────────────────────
+function renderSchedule(){
+  const p=params(), sched=buildSchedule(), byDay={};
+  sched.forEach(s=>{if(!byDay[s.diaAsignado])byDay[s.diaAsignado]=[];byDay[s.diaAsignado].push(s);});
+  const days=Object.keys(byDay).map(Number).sort((a,b)=>a-b), ajust=sched.filter(s=>s.ajustado).length;
+  document.getElementById('sched-sub').textContent=`Disparada por ROP · Máx. ${p.maxSkuDia} SKUs/día · Inicio: día ${p.diaInicio} del mes`;
+  document.getElementById('sched-kpis').innerHTML=`
+    <div class="kpi blue"><div class="kpi-label">SKUs programados</div><div class="kpi-value">${sched.length}</div></div>
+    <div class="kpi green"><div class="kpi-label">Días con producción</div><div class="kpi-value">${days.length}</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Días ajustados</div><div class="kpi-value">${ajust}</div><div class="kpi-sub">Por límite de capacidad</div></div>
+    <div class="kpi red"><div class="kpi-label">Días restantes mes</div><div class="kpi-value">${Math.max(0,p.diasMes-p.diaInicio+1)}</div></div>`;
+  document.getElementById('sched-days').innerHTML=days.length===0
+    ?`<div class="card" style="text-align:center;color:var(--text3)">Sin SKUs programados para este mes.</div>`
+    :days.map(dia=>`
+    <div class="day-block"><div class="day-header"><div class="day-num-label">${dia}</div><div><div style="font-weight:600;font-size:14px">Día hábil ${dia}</div><div class="day-label">${byDay[dia].length} SKU${byDay[dia].length>1?'s':''} a producir</div></div></div>
+    ${byDay[dia].map(s=>`<div class="day-sku-row"><span class="badge badge-${s.tipo}">${TIPO_LABEL[s.tipo]}</span><span class="mono" style="color:var(--accent);font-size:12px">${s.sku}</span><span style="font-weight:500;flex:1">${s.nombre}</span><span class="text-sm">Inv@ROP: <span class="mono">${fmt(s.invEnRop)}</span></span><span class="text-sm">Lote: <span class="mono" style="color:var(--green)">${fmt(s.eoqReal)}</span> pzas</span><span class="text-sm">Post-prod: <span class="mono">${fmt(s.invPost)}</span></span>${s.ajustado?'<span class="badge badge-EXCESO" style="font-size:10px">⚠ Recorrido</span>':''}</div>`).join('')}
+    </div>`).join('');
+}
+
+// ── CALENDARIO ────────────────────────────────────────────────────────────────
+function changeMonth(d){calMonth+=d;if(calMonth>11){calMonth=0;calYear++;}if(calMonth<0){calMonth=11;calYear--;}renderCalendario();}
+function getMaqsByMonth(y,m){return maqs().filter(mq=>{const s=parseDateLocal(mq.start),e=parseDateLocal(mq.end);return s<=new Date(y,m+1,0)&&e>=new Date(y,m,1);});}
+
+function renderCalendario(){
+  document.getElementById('cal-month-label').textContent=MESES[calMonth]+' '+calYear;
+  const monthMaqs=getMaqsByMonth(calYear,calMonth);
+  const totalLote=monthMaqs.reduce((a,m)=>a+m.lote,0);
+  const diasOcupados=new Set();
+  monthMaqs.forEach(mq=>{let d=parseDateLocal(mq.start),e=parseDateLocal(mq.end);while(d<=e){if(d.getFullYear()===calYear&&d.getMonth()===calMonth)diasOcupados.add(d.getDate());d=new Date(d.getTime()+86400000);}});
+  document.getElementById('cal-kpis').innerHTML=`
+    <div class="kpi blue"><div class="kpi-label">Maquilas activas</div><div class="kpi-value">${monthMaqs.length}</div></div>
+    <div class="kpi green"><div class="kpi-label">Piezas programadas</div><div class="kpi-value">${fmt(totalLote)}</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Días ocupados</div><div class="kpi-value">${diasOcupados.size}</div></div>
+    <div class="kpi red"><div class="kpi-label">SKUs distintos</div><div class="kpi-value">${new Set(monthMaqs.map(m=>m.sku)).size}</div></div>`;
+  const firstDay=new Date(calYear,calMonth,1),lastDay=new Date(calYear,calMonth+1,0);
+  let startWd=firstDay.getDay();startWd=startWd===0?6:startWd-1;
+  const today=dateStr(new Date()),cells=[];
+  for(let i=0;i<startWd;i++)cells.push(null);
+  for(let d=1;d<=lastDay.getDate();d++)cells.push(d);
+  while(cells.length%7!==0)cells.push(null);
+  const byDay={};
+  monthMaqs.forEach(mq=>{
+    let d=parseDateLocal(mq.start),e=parseDateLocal(mq.end);
+    const endOrig=mq.endOrig||mq.end;
+    while(d<=e){
+      if(d.getFullYear()===calYear&&d.getMonth()===calMonth){
+        const k=d.getDate();
+        if(!byDay[k])byDay[k]=[];
+        byDay[k].push({mq,isStart:dateStr(d)===mq.start,isEnd:dateStr(d)===mq.end,isEndOrig:dateStr(d)===endOrig&&endOrig!==mq.end});
+      }
+      d=new Date(d.getTime()+86400000);
+    }
+    // Also mark original planned end if different
+    if(mq.endOrig && mq.endOrig!==mq.end){
+      const dOrig=parseDateLocal(mq.endOrig);
+      if(dOrig.getFullYear()===calYear&&dOrig.getMonth()===calMonth){
+        const k=dOrig.getDate();
+        if(!byDay[k])byDay[k]=[];
+        // mark planned end indicator only if not already there
+        const already=byDay[k].find(x=>x.mq.id===mq.id);
+        if(!already) byDay[k].push({mq,isStart:false,isEnd:false,isPlannedEnd:true});
+        else already.isPlannedEnd=true;
+      }
+    }
+  });
+
+  document.getElementById('cal-body').innerHTML=cells.map((d,i)=>{
+    if(d===null)return`<div class="cal-cell cal-empty"></div>`;
+    const wd=i%7,isWe=wd===5||wd===6,ds=`${calYear}-${pad(calMonth+1)}-${pad(d)}`,isToday=ds===today;
+    const entries=byDay[d]||[];
+    const maxShow=2;
+    let html='';
+    entries.slice(0,maxShow).forEach(({mq,isStart,isEnd,isEndOrig,isPlannedEnd})=>{
+      if(isPlannedEnd){
+        html+=`<div class="day-pill fin-plan" title="Fin planeado: ${mq.nombre}">📅 Fin plan · ${mq.sku}</div>`;
+        return;
+      }
+      // Day indicator pills
+      if(isStart && mq.terminada) html+=`<div class="day-pill terminada" title="Terminada: ${mq.nombre}">✅ Terminada · ${mq.sku}</div>`;
+      else if(isStart) html+=`<div class="day-pill inicio" title="Inicio: ${mq.nombre}">▶ Inicio · ${mq.sku}</div>`;
+      if(!mq.terminada){
+        if(isEnd && mq.endOrig && mq.end!==mq.endOrig) html+=`<div class="day-pill fin-real" title="Terminó antes: ${mq.nombre}">✓ Fin real · ${mq.sku}</div>`;
+        else if(isEnd) html+=`<div class="day-pill fin-plan" title="Fin: ${mq.nombre}">■ Fin · ${mq.sku}</div>`;
+      }
+      // Chip bar
+      const cls=isStart&&isEnd?'':isStart?'span-start':isEnd?'span-end':'span-mid';
+      const termClass=mq.terminada?' terminada':'';
+      const piezasLabel=isStart?`<span class="chip-piezas">${fmt(mq.lote)} pzas</span>`:'';
+      html+=`<div class="maq-chip ${mq.tipo}${termClass} ${cls}" onclick="openMaqDetail(${mq.id})" title="${mq.nombre} · ${fmt(mq.lote)} pzas">${isStart?mq.nombre:'···'}${piezasLabel}</div>`;
+    });
+    const more=entries.length>maxShow?`<div class="cal-overflow">+${entries.length-maxShow} más</div>`:'';
+    return`<div class="cal-cell${isWe?' cal-weekend':''}${isToday?' cal-today':''}"><div class="cal-day-num">${d}</div>${html}${more}</div>`;
+  }).join('');
+
+  // Table list
+  document.getElementById('maq-list-tbody').innerHTML=monthMaqs.length===0
+    ?`<tr><td colspan="9" style="text-align:center;color:var(--text3);padding:24px">Sin maquilas para este mes.</td></tr>`
+    :[...monthMaqs].sort((a,b)=>a.start.localeCompare(b.start)).map(mq=>{
+      const terminadaAntes=mq.endOrig&&mq.end!==mq.endOrig;
+      return`<tr>
+        <td><span class="mono" style="color:var(--accent)">${mq.sku}</span></td>
+        <td style="font-weight:500">${mq.nombre}</td>
+        <td><span class="badge badge-${mq.tipo}">${TIPO_LABEL[mq.tipo]}</span></td>
+        <td class="num-right mono" style="color:var(--green)">${fmt(mq.lote)}</td>
+        <td class="num-right mono">${mq.start}</td>
+        <td class="num-right mono">${mq.endOrig||mq.end}</td>
+        <td class="num-right mono">${mq.terminada?`<span style="color:var(--green);font-weight:600">✅ ${mq.end}</span>`:terminadaAntes?`<span style="color:var(--laser)">${mq.end} ✓</span>`:mq.end}</td>
+        <td class="num-right mono">${diffDays(mq.start,mq.end)}</td>
+        <td><div class="flex">
+          <button class="btn btn-ghost btn-sm" onclick="openMaqModal(${mq.id})">Editar</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteMaquila(${mq.id})">✕</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+}
+
+// ── MAQUILA FORM ──────────────────────────────────────────────────────────────
+function openMaqModal(id){
+  const sel=document.getElementById('mf-sku');
+  sel.innerHTML=skus().map(s=>`<option value="${s.sku}">${s.sku} – ${s.nombre}</option>`).join('');
+  if(id){const mq=maqs().find(x=>x.id===id);document.getElementById('maq-form-title').textContent='Editar maquila';document.getElementById('mf-id').value=id;sel.value=mq.sku;document.getElementById('mf-nombre').value=mq.nombre;document.getElementById('mf-start').value=mq.start;document.getElementById('mf-end').value=mq.end;document.getElementById('mf-lote').value=mq.lote;}
+  else{document.getElementById('maq-form-title').textContent='Nueva maquila';document.getElementById('mf-id').value='';const today=dateStr(new Date());document.getElementById('mf-start').value=today;document.getElementById('mf-end').value=today;fillMaqSku();}
+  document.getElementById('mf-lote-info').textContent='';
+  document.getElementById('maq-modal').classList.add('open');
+}
+function fillMaqSku(){const sku=document.getElementById('mf-sku').value,s=skus().find(x=>x.sku===sku);if(s){document.getElementById('mf-nombre').value=s.nombre;document.getElementById('mf-lote').value=calcEOQ(s,params()).eoqReal;}}
+function calcularLoteDemanda(){
+  const sku = document.getElementById('mf-sku').value;
+  const s = skus().find(x => x.sku === sku);
+  if(!s || !s.dMes){ 
+    document.getElementById('mf-lote-info').textContent = 'Este SKU no tiene demanda mensual definida.';
+    return; 
+  }
+  const p = params();
+  const cons = s.dMes / p.diasMes;
+  // Inventario actual menos consumo hasta la fecha de inicio de la maquila
+  const startVal = document.getElementById('mf-start').value;
+  const fechaInicio = diaHabilAFecha(new Date().getFullYear(), new Date().getMonth(), p.diaInicio);
+  let diasHabiles = 0;
+  if(startVal){
+    let d = new Date(fechaInicio);
+    const startDate = parseDateLocal(startVal);
+    while(d < startDate){
+      if(d.getDay()!==0 && d.getDay()!==6) diasHabiles++;
+      d = new Date(d.getTime()+86400000);
+    }
+  }
+  const invEnFecha = Math.max(0, Math.round(s.inv - cons * diasHabiles));
+  const lote = Math.max(0, s.dMes - invEnFecha);
+  document.getElementById('mf-lote').value = lote;
+  document.getElementById('mf-lote-info').textContent = 
+    `Inv. estimado al inicio: ${(invEnFecha).toLocaleString('es-MX')} pzas · Demanda: ${s.dMes.toLocaleString('es-MX')} · Lote: ${lote.toLocaleString('es-MX')} pzas`;
+}
+function closeMaqModal(){document.getElementById('maq-modal').classList.remove('open');}
+function saveMaquila(){
+  const id=document.getElementById('mf-id').value;
+  const sku=document.getElementById('mf-sku').value,skuObj=skus().find(x=>x.sku===sku);
+  const mq={id:id?+id:maqIdCounter++,sku,tipo:skuObj?skuObj.tipo:'STD',nombre:document.getElementById('mf-nombre').value,start:document.getElementById('mf-start').value,end:document.getElementById('mf-end').value,lote:+document.getElementById('mf-lote').value};
+  if(id) ct().maquilas=maqs().map(x=>x.id===+id?mq:x);
+  else ct().maquilas.push(mq);
+  closeMaqModal();renderCalendario();saveData();
+}
+function deleteMaquila(id){if(confirm('¿Eliminar esta maquila?')){ct().maquilas=maqs().filter(x=>x.id!==id);renderCalendario();saveData();}}
+let currentDetailId = null;
+function openMaqDetail(id){
+  currentDetailId=id;
+  const mq=maqs().find(x=>x.id===id);
+  document.getElementById('maq-detail-title').textContent=mq.nombre;
+  const terminadaAntes=mq.endOrig&&mq.end!==mq.endOrig;
+  document.getElementById('maq-detail-rows').innerHTML=[
+    ['SKU',mq.sku],
+    ['Tipo',TIPO_LABEL[mq.tipo]],
+    ['Lote',fmt(mq.lote)+' pzas'],
+    ['Fecha inicio',mq.start],
+    ['Fin planeado',mq.endOrig||mq.end],
+    ['Fin real',terminadaAntes?`<span style="color:var(--laser)">${mq.end} ✓ Terminó antes</span>`:mq.end],
+    ['Duración real',diffDays(mq.start,mq.end)+' días'],
+  ].map(([l,v])=>`<div class="detail-row"><span class="detail-label">${l}</span><span class="detail-val">${v}</span></div>`).join('');
+  // Pre-fill terminar date with today or current end
+  document.getElementById('maq-fin-real').value=mq.end;
+  // Deshabilitar si ya está terminada
+  const btnAplicar=document.querySelector('#maq-detail-modal .btn-ghost[onclick="marcarTerminada()"]');
+  const inputFin=document.getElementById('maq-fin-real');
+  if(mq.terminada){
+    if(btnAplicar){btnAplicar.disabled=true;btnAplicar.textContent='✅ Ya terminada';btnAplicar.style.opacity='.5';}
+    if(inputFin) inputFin.disabled=true;
+  } else {
+    if(btnAplicar){btnAplicar.disabled=false;btnAplicar.textContent='✓ Aplicar';btnAplicar.style.opacity='';}
+    if(inputFin) inputFin.disabled=false;
+  }
+  document.getElementById('maq-detail-del').onclick=()=>{deleteMaquila(id);closeMaqDetail();};
+  document.getElementById('maq-detail-edit').onclick=()=>{closeMaqDetail();openMaqModal(id);};
+  document.getElementById('maq-detail-modal').classList.add('open');
+}
+function marcarTerminada(){
+  const newEnd=document.getElementById('maq-fin-real').value;
+  if(!newEnd||!currentDetailId) return;
+  const idx=ct().maquilas.findIndex(x=>x.id===currentDetailId);
+  if(idx===-1) return;
+  const mq=ct().maquilas[idx];
+  if(!mq.endOrig) mq.endOrig=mq.end;
+  if(newEnd>mq.endOrig){ alert('La fecha no puede ser posterior al fin planeado ('+mq.endOrig+')'); return; }
+  if(mq.terminada){ alert('Esta maquila ya fue marcada como terminada.'); return; }
+  mq.end=newEnd;
+  mq.terminada=true;
+  // Sumar lote al inventario del SKU
+  const skuObj=ct().skus.find(s=>s.sku===mq.sku);
+  if(skuObj){
+    skuObj.inv=(skuObj.inv||0)+mq.lote;
+  }
+  closeMaqDetail();
+  renderCalendario();
+  renderDashboard();
+  saveData();
+  // Mostrar confirmación
+  const alertEl=document.getElementById('auto-alert');
+  alertEl.style.display='block';
+  alertEl.textContent=`✅ Maquila de ${mq.nombre} marcada como terminada. Se agregaron ${(mq.lote).toLocaleString('es-MX')} pzas al inventario.`;
+  setTimeout(()=>{alertEl.style.display='none';},5000);
+}
+function closeMaqDetail(){document.getElementById('maq-detail-modal').classList.remove('open');}
+
+// ── CATALOG ───────────────────────────────────────────────────────────────────
+function renderCatalog(){
+  const data=getComputed(),q=catFilter.toLowerCase();
+  const filtered=data.filter(s=>s.sku.includes(catFilter)||s.nombre.toLowerCase().includes(q));
+  document.getElementById('cat-tbody').innerHTML=filtered.length===0
+    ?`<tr><td colspan="14" style="text-align:center;color:var(--text3);padding:24px">Sin SKUs. Haz clic en "+ Agregar SKU".</td></tr>`
+    :filtered.map(s=>`<tr>
+    <td><span class="mono" style="color:var(--accent)">${s.sku}</span></td><td style="font-weight:500">${s.nombre}</td>
+    <td><span class="badge badge-${s.tipo}">${TIPO_LABEL[s.tipo]}</span></td>
+    <td class="num-right mono">${fmt(s.inv)}</td><td class="num-right mono">${fmt(s.dMes)}</td>
+    <td class="num-right mono">${fmxn(s.cu)}</td><td class="num-right mono">${s.lt}</td><td class="num-right mono">${fmt(s.minLote)}</td>
+    <td class="num-right mono" style="color:var(--text2)">${fmt(s.eoqPuro)}</td>
+    <td class="num-right mono" style="color:var(--green);font-weight:600">${fmt(s.eoqReal)}</td>
+    <td class="num-right mono" style="color:var(--yellow)">${fmt(s.rop)}</td><td class="num-right mono">${fmt(s.invMax)}</td>
+    <td><span class="badge badge-${s.estado}">${ESTADO_LABEL[s.estado]}</span></td>
+    <td><div class="flex"><button class="btn btn-ghost btn-sm" onclick="openForm(${s.id})">Editar</button><button class="btn btn-danger btn-sm" onclick="deleteSku(${s.id})">✕</button></div></td>
+  </tr>`).join('');
+}
+function filterCatalog(v){catFilter=v;renderCatalog();}
+
+// ── SKU FORM ──────────────────────────────────────────────────────────────────
+function openForm(id){
+  if(id){const s=skus().find(x=>x.id===id);document.getElementById('form-title').textContent='Editar SKU';document.getElementById('form-id').value=id;document.getElementById('f-sku').value=s.sku;document.getElementById('f-nombre').value=s.nombre;document.getElementById('f-tipo').value=s.tipo;document.getElementById('f-lt').value=s.lt;document.getElementById('f-inv').value=s.inv;document.getElementById('f-dMes').value=s.dMes;document.getElementById('f-tol').value=s.tol;document.getElementById('f-cu').value=s.cu;document.getElementById('f-setup').value=s.setup;document.getElementById('f-minLote').value=s.minLote;}
+  else{document.getElementById('form-title').textContent='Agregar nuevo SKU';document.getElementById('form-id').value='';document.getElementById('f-setup').value=28.75;document.getElementById('f-lt').value=4;document.getElementById('f-minLote').value=500;document.getElementById('f-tipo').value='STD';['sku','nombre','inv','dMes','tol','cu'].forEach(k=>document.getElementById('f-'+k).value='');}
+  document.getElementById('sku-modal').classList.add('open');
+}
+function closeForm(){document.getElementById('sku-modal').classList.remove('open');}
+function saveSku(){
+  const id=document.getElementById('form-id').value;
+  const s={sku:document.getElementById('f-sku').value,nombre:document.getElementById('f-nombre').value,tipo:document.getElementById('f-tipo').value,lt:+document.getElementById('f-lt').value,inv:+document.getElementById('f-inv').value,dMes:+document.getElementById('f-dMes').value,tol:+document.getElementById('f-tol').value,cu:+document.getElementById('f-cu').value,setup:+document.getElementById('f-setup').value,minLote:+document.getElementById('f-minLote').value};
+  if(id){s.id=+id;ct().skus=skus().map(x=>x.id===+id?s:x);}
+  else{s.id=skuIdCounter++;ct().skus.push(s);}
+  closeForm();renderCatalog();saveData();
+}
+function deleteSku(id){if(confirm('¿Eliminar este SKU?')){ct().skus=skus().filter(s=>s.id!==id);renderCatalog();saveData();}}
+
+// ── PARAMS ────────────────────────────────────────────────────────────────────
+function loadParamInputs(){
+  const p=params();
+  document.getElementById('p-diasMes').value=p.diasMes;document.getElementById('p-hPct').value=p.hPct;document.getElementById('p-diaInicio').value=p.diaInicio;document.getElementById('p-maxSkuDia').value=p.maxSkuDia;
+  const formulas=[["H_mes","Cu × H% anual / 12","Costo de mantenimiento mensual por pieza"],["EOQ Puro","√ (2 × D_mes × Setup / H_mes)","Lote matemáticamente óptimo"],["EOQ Real","MAX(EOQ Puro, Mín. Lote)","Lote real respetando mínimo de producción"],["SS","D_mes × 5%","Stock de seguridad"],["ROP","(D_mes / Días_mes) × LT + SS","Punto de reorden"],["Inv. Máximo","EOQ Real + SS","Techo de inventario"],["Día ROP","Día inicio + (Inv − ROP) / Cons. diario","Día hábil en que se dispara la orden"]];
+  document.getElementById('formulas-list').innerHTML=formulas.map(([n,f,d])=>`<div class="params-formula"><div class="flex"><span style="font-family:var(--mono);font-size:12px;color:var(--accent);min-width:120px">${n}</span><span style="font-family:var(--mono);font-size:12px;color:var(--green)">${f}</span></div><div class="text-sm" style="margin-top:3px;padding-left:120px">${d}</div></div>`).join('');
+}
+function saveParams(){
+  const p=params();
+  p.diasMes=+document.getElementById('p-diasMes').value;p.hPct=+document.getElementById('p-hPct').value;p.diaInicio=+document.getElementById('p-diaInicio').value;p.maxSkuDia=+document.getElementById('p-maxSkuDia').value;
+  saveData();
+  alert('✅ Parámetros guardados para '+ct().label);
+}
+
+// ── ELIMINAR MES ─────────────────────────────────────────────────────────────
+function eliminarMesMaquilas(){
+  const mesLabel = MESES[calMonth] + ' ' + calYear;
+  const prefix = `${calYear}-${pad(calMonth+1)}`;
+  const enMes = maqs().filter(m => m.start.startsWith(prefix) || m.end.startsWith(prefix));
+  if(enMes.length === 0){ alert('No hay maquilas en ' + mesLabel + '.'); return; }
+  if(!confirm(`¿Eliminar las ${enMes.length} maquila(s) de ${mesLabel}?`)) return;
+  ct().maquilas = maqs().filter(m => !m.start.startsWith(prefix) && !m.end.startsWith(prefix));
+  renderCalendario();
+  saveData();
+}
+
+// ── AUTO-PROGRAMAR ────────────────────────────────────────────────────────────
+function diaHabilAFecha(year, month, diaHabil){
+  // Converts business day number (1,2,3...) to actual calendar date
+  let count = 0;
+  let d = new Date(year, month, 1);
+  while(d.getMonth() === month){
+    if(d.getDay() !== 0 && d.getDay() !== 6){ // not weekend
+      count++;
+      if(count === diaHabil) return new Date(d);
+    }
+    d = new Date(d.getTime() + 86400000);
+  }
+  // If diaHabil exceeds working days in month, return last working day
+  return d;
+}
+
+function nextBizDay(date){
+  let d = new Date(date.getTime() + 86400000);
+  while(d.getDay()===0||d.getDay()===6) d = new Date(d.getTime()+86400000);
+  return d;
+}
+
+function addBizDays(startDate, days){
+  let d = new Date(startDate);
+  let count = 0;
+  while(count < days){
+    d = new Date(d.getTime() + 86400000);
+    if(d.getDay()!==0 && d.getDay()!==6) count++;
+  }
+  return d;
+}
+
+function autoProgramar(){
+  const p = params();
+  const hoy = new Date();
+  const year = hoy.getFullYear();
+  const month = hoy.getMonth();
+
+  // Ask confirmation if there are already auto maquilas this month
+  const yaExisten = maqs().filter(m => m.auto && m.start.startsWith(`${year}-${pad(month+1)}`));
+  if(yaExisten.length > 0){
+    if(!confirm(`Ya existen ${yaExisten.length} maquila(s) auto-programadas este mes. ¿Quieres reemplazarlas?`)) return;
+    ct().maquilas = maqs().filter(m => !(m.auto && m.start.startsWith(`${year}-${pad(month+1)}`)));
+  }
+
+  const generadas = [];
+  const cons_diario = s => s.dMes / p.diasMes;
+
+  // Fecha real del día hábil de inicio
+  const fechaInicio = diaHabilAFecha(year, month, p.diaInicio);
+
+  skus().forEach(s => {
+    if(!s.dMes || s.dMes === 0) return;
+
+    const calc = calcEOQ(s, p);
+    const rop = calc.rop;
+    const cons = cons_diario(s);
+
+    // Días hábiles desde diaInicio hasta que inventario toca ROP
+    const dh = s.inv <= rop ? 0 : Math.floor((s.inv - rop) / cons);
+
+    // Fecha de inicio = fechaInicio + dh días hábiles, nunca antes de fechaInicio
+    let startDate = dh <= 0 ? new Date(fechaInicio) : addBizDays(fechaInicio, dh);
+
+    // Si cae en fin de semana, mover al siguiente día hábil
+    while(startDate.getDay()===0||startDate.getDay()===6)
+      startDate = new Date(startDate.getTime()+86400000);
+
+    // Duración = LT días hábiles (máx 4)
+    const lt = Math.min(s.lt || 4, 4);
+    const endDate = lt <= 1 ? new Date(startDate) : addBizDays(startDate, lt - 1);
+
+    // Lote = exactamente lo que falta para cubrir la demanda mensual
+    const invEnRop = Math.max(0, Math.round(s.inv - cons * dh));
+    const lote = Math.max(0, s.dMes - invEnRop);
+
+    generadas.push({
+      id: maqIdCounter++,
+      sku: s.sku,
+      tipo: s.tipo,
+      nombre: s.nombre,
+      start: dateStr(startDate),
+      end: dateStr(endDate),
+      endOrig: dateStr(endDate),
+      lote,
+      auto: true,
+    });
+  });
+
+  // Sort by start date and check capacity (maxSkuDia per day)
+  generadas.sort((a,b) => a.start.localeCompare(b.start));
+  const diaCount = {};
+  generadas.forEach(mq => {
+    let d = mq.start;
+    while((diaCount[d]||0) >= p.maxSkuDia){
+      const next = nextBizDay(new Date(d+'T00:00:00'));
+      const lt = Math.min(skus().find(s=>s.sku===mq.sku)?.lt||4, 4);
+      const endD = lt <= 1 ? new Date(next) : addBizDays(next, lt-1);
+      mq.start = dateStr(next);
+      mq.end = dateStr(endD);
+      mq.endOrig = mq.end;
+      d = mq.start;
+    }
+    diaCount[d] = (diaCount[d]||0) + 1;
+  });
+
+  generadas.forEach(m => ct().maquilas.push(m));
+
+  // Show alert
+  const alertEl = document.getElementById('auto-alert');
+  alertEl.style.display = 'block';
+  alertEl.textContent = `⚡ Se programaron ${generadas.length} maquila(s) automáticamente para ${MESES[month]} ${year}. Puedes editarlas o eliminarlas individualmente.`;
+  setTimeout(()=>{ alertEl.style.display='none'; }, 6000);
+
+  // Navigate calendar to current month
+  calYear = year; calMonth = month;
+  renderCalendario();
+  saveData();
+}
+
+// ── PERSISTENCIA GOOGLE APPS SCRIPT (JSONP split) ───────────────────────────
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzu6lXeXxyHoU3CkzY_J_OnZ5FsWZPR80J-ZdS2JokG1kUvpiSXVG-ea4IziKmR5cFzvA/exec';
+let saving = false;
+let saveQueue = [];
+
+function setSyncStatus(state, msg){
+  let bar = document.getElementById('sync-status-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'sync-status-bar';
+    bar.style.cssText = 'position:fixed;bottom:16px;right:16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:7px;z-index:999';
+    document.body.appendChild(bar);
+  }
+  const colors = {ok:'#00c896',err:'#ff4757',ing:'#ffa502',load:'#00d4ff'};
+  const anim = state==='ing'?'animation:pulse 1s infinite':'';
+  bar.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${colors[state]||colors.ing};display:inline-block;${anim}"></span>${msg}`;
+}
+
+// Guardar un key via JSONP GET
+function jsonpSave(key, value, onDone){
+  const cbName = 'eoq_sv_' + Date.now();
+  const script = document.createElement('script');
+  script.src = GAS_URL + '?action=save&key=' + key + '&value=' + encodeURIComponent(JSON.stringify(value)) + '&callback=' + cbName;
+  window[cbName] = function(res){
+    delete window[cbName];
+    try{ document.head.removeChild(script); }catch(e){}
+    if(onDone) onDone(res && res.ok);
+  };
+  script.onerror = function(){ delete window[cbName]; if(onDone) onDone(false); };
+  document.head.appendChild(script);
+}
+
+// Leer un key via JSONP GET
+function jsonpGet(cbName, onDone){
+  const script = document.createElement('script');
+  script.src = GAS_URL + '?callback=' + cbName;
+  window[cbName] = function(res){
+    delete window[cbName];
+    try{ document.head.removeChild(script); }catch(e){}
+    onDone(res);
+  };
+  script.onerror = function(){ delete window[cbName]; onDone(null); };
+  document.head.appendChild(script);
+}
+
+// Guardar todo en partes pequeñas
+let saveTimer = null;
+function saveData(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 600);
+}
+
+function doSave(){
+  saving = true;
+  setSyncStatus('ing','Guardando...');
+  const p = {
+    troq_skus:    CT_DATA.troq.skus,
+    troq_maqs:    CT_DATA.troq.maquilas,
+    troq_params:  CT_DATA.troq.params,
+    laser_skus:   CT_DATA.laser.skus,
+    laser_maqs:   CT_DATA.laser.maquilas,
+    laser_params: CT_DATA.laser.params,
+    counters:     {maqIdCounter, skuIdCounter}
+  };
+  const keys = Object.keys(p);
+  let i = 0;
+  function saveNext(ok){
+    if(!ok){ setSyncStatus('err','Error al guardar'); saving=false; return; }
+    if(i >= keys.length){
+      setSyncStatus('ok','Guardado ✓');
+      setTimeout(()=>{ saving = false; }, 2000);
+      return;
+    }
+    const key = keys[i++];
+    jsonpSave(key, p[key], saveNext);
+  }
+  saveNext(true);
+}
+
+function applyData(d){
+  if(!d) return;
+  if(d.troq_skus && d.troq_skus.length)   CT_DATA.troq.skus     = d.troq_skus;
+  if(d.troq_maqs)                          CT_DATA.troq.maquilas = d.troq_maqs;
+  if(d.troq_params)                        CT_DATA.troq.params   = {...CT_DATA.troq.params, ...d.troq_params};
+  if(d.laser_skus)                         CT_DATA.laser.skus    = d.laser_skus;
+  if(d.laser_maqs)                         CT_DATA.laser.maquilas= d.laser_maqs;
+  if(d.laser_params)                       CT_DATA.laser.params  = {...CT_DATA.laser.params, ...d.laser_params};
+  if(d.counters){
+    if(d.counters.maqIdCounter) maqIdCounter = d.counters.maqIdCounter;
+    if(d.counters.skuIdCounter) skuIdCounter = d.counters.skuIdCounter;
+  }
+}
+
+function loadData(){
+  setSyncStatus('load','Cargando...');
+  loadRemote();
+}
+
+function loadRemote(){
+  if(saving) return;
+  jsonpGet('eoq_load_' + Date.now(), function(res){
+    if(res && res.ok && res.data){
+      applyData(res.data);
+      setSyncStatus('ok','Sincronizado ✓');
+      const curPage = document.querySelector('.page.active');
+      if(curPage){
+        const id = curPage.id.replace('page-','');
+        const fns = {dashboard:renderDashboard,schedule:renderSchedule,calendario:renderCalendario,catalog:renderCatalog,params:loadParamInputs};
+        if(fns[id]) fns[id]();
+      }
+    } else {
+      setSyncStatus('err','Sin conexion');
+    }
+  });
+}
+
+function startAutoSync(){
+  setInterval(()=>{
+    if(!saving){
+      const active = document.activeElement;
+      const isTyping = active && (active.tagName==='INPUT'||active.tagName==='SELECT'||active.tagName==='TEXTAREA');
+      if(!isTyping) loadRemote();
+    }
+  }, 15000);
+}
+
+function exportarDatos(){
+  const blob = new Blob([JSON.stringify({
+    troq: {skus:CT_DATA.troq.skus, maquilas:CT_DATA.troq.maquilas, params:CT_DATA.troq.params},
+    laser:{skus:CT_DATA.laser.skus, maquilas:CT_DATA.laser.maquilas, params:CT_DATA.laser.params},
+    maqIdCounter, skuIdCounter
+  }, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'eoq_datos_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+}
+
+function importarDatos(input){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try{
+      const d = JSON.parse(e.target.result);
+      if(!d.troq && !d.laser){ alert('Archivo invalido.'); return; }
+      if(d.troq){
+        if(d.troq.skus)     CT_DATA.troq.skus     = d.troq.skus;
+        if(d.troq.maquilas) CT_DATA.troq.maquilas = d.troq.maquilas;
+        if(d.troq.params)   CT_DATA.troq.params   = d.troq.params;
+      }
+      if(d.laser){
+        if(d.laser.skus)     CT_DATA.laser.skus     = d.laser.skus;
+        if(d.laser.maquilas) CT_DATA.laser.maquilas = d.laser.maquilas;
+        if(d.laser.params)   CT_DATA.laser.params   = d.laser.params;
+      }
+      if(d.maqIdCounter) maqIdCounter = d.maqIdCounter;
+      if(d.skuIdCounter) skuIdCounter = d.skuIdCounter;
+      saveData();
+      if(confirm('Datos importados. Recargar?')){ location.reload(); }
+    }catch(err){ alert('Error: ' + err.message); }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+loadData();
+startAutoSync();
+</script>
+</body>
+</html>
